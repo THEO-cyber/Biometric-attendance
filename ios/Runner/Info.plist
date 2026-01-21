@@ -10,6 +10,16 @@
 		</dict>
 	<key>NSFaceIDUsageDescription</key> 
 	<string>We use Face ID to quickly and securely verify your identity.</string>
+	<key>NSBiometricUsageDescription</key>
+	<string>This app uses biometrics for authentication</string>
+	<key>NSCameraUsageDescription</key>
+	<string>This app needs access to camera to capture photos for attendance records.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>This app needs access to photo library to select profile pictures.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app needs location access to verify your attendance location.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>This app needs location access to verify your attendance location even when the app is in background.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
