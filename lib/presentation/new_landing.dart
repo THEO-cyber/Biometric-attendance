@@ -224,13 +224,12 @@ class _NewLandingScreenState extends State<NewLandingScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.fingerprint, color: accent, size: isWide ? 60 : 40),
               SizedBox(width: isWide ? 20 : 10),
               Text(
-                'HIMS Attendance',
+                'Assiduity.Creativity.Proffessionalism',
                 style: TextStyle(
                   color: accent,
-                  fontSize: isWide ? 38 : 26,
+                  fontSize: isWide ? 12 : 14,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 1.1,
                 ),
@@ -303,7 +302,8 @@ class _NewLandingScreenState extends State<NewLandingScreen> {
   }
 
   Widget _featureCard({
-    required IconData icon,
+    IconData? icon,
+    Widget? customIcon,
     required String title,
     required Color color,
     required VoidCallback onTap,
@@ -328,11 +328,13 @@ class _NewLandingScreenState extends State<NewLandingScreen> {
                   color: isDark ? Colors.grey[900] : color.withAlpha(30),
                 ),
                 padding: EdgeInsets.all(iconSize / 2),
-                child: Icon(
-                  icon,
-                  size: iconSize,
-                  color: isDark ? Colors.white : color,
-                ),
+                child:
+                    customIcon ??
+                    Icon(
+                      icon!,
+                      size: iconSize,
+                      color: isDark ? Colors.white : color,
+                    ),
               ),
               SizedBox(height: iconSize / 2),
               Text(
@@ -349,6 +351,8 @@ class _NewLandingScreenState extends State<NewLandingScreen> {
       ),
     );
   }
+
+  // ...existing code...
 
   void _showConfirmAttendanceDialog(
     BuildContext context,
@@ -383,12 +387,11 @@ class _NewLandingScreenState extends State<NewLandingScreen> {
                 ),
               ),
               onPressed: () async {
-                // Check if attendance session is open
                 final studentRepo = StudentRepository();
-                final sessionId = await studentRepo.fetchOpenSessionIdForCourse(
+                final session = await studentRepo.fetchOpenSessionForCourse(
                   course['id'],
                 );
-                if (sessionId == null) {
+                if (session == null || session['active'] != true) {
                   Navigator.pop(context);
                   showDialog(
                     context: context,
@@ -408,7 +411,8 @@ class _NewLandingScreenState extends State<NewLandingScreen> {
                   return;
                 }
                 Navigator.pop(context);
-                _showBiometricAttendanceScreen(context, course);
+                // Pass session to the next screen
+                _showBiometricAttendanceScreen(context, course, session);
               },
               child: const Text('Take Attendance'),
             ),
@@ -421,13 +425,14 @@ class _NewLandingScreenState extends State<NewLandingScreen> {
   void _showBiometricAttendanceScreen(
     BuildContext context,
     Map<String, dynamic> course,
+    Map<String, dynamic> session, // add this parameter
   ) {
     print(
       '[DEBUG] Launching AttendanceScreen with studentId=$studentId, course=' +
           course['name'] +
           ' (id: ' +
           course['id'].toString() +
-          ')',
+          '), sessionId: ${session['sessionId']}',
     );
     Navigator.push(
       context,
@@ -440,10 +445,12 @@ class _NewLandingScreenState extends State<NewLandingScreen> {
             'email': studentEmail ?? '',
           },
           course: course,
+          session: session, // pass session to AttendanceScreen
         ),
       ),
     );
   }
+  // ...existing code...
 
   // _showStatusDialog removed; replaced by AttendanceRecordsScreen
 
@@ -476,13 +483,21 @@ class _NewLandingScreenState extends State<NewLandingScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                CircleAvatar(
-                  backgroundColor: Colors.white,
-                  radius: width * 0.06,
-                  child: Icon(
-                    Icons.fingerprint,
-                    color: isDark ? Colors.grey[900] : Colors.white,
-                    size: width * 0.08,
+                GestureDetector(
+                  onTap: () async {},
+                  child: CircleAvatar(
+                    backgroundColor: isDark ? Colors.white : Colors.white,
+                    radius: width * 0.06,
+                    backgroundImage: _profileImage != null
+                        ? FileImage(_profileImage!)
+                        : null,
+                    child: _profileImage == null
+                        ? Icon(
+                            Icons.person,
+                            color: isDark ? Colors.grey[900] : Colors.black,
+                            size: width * 0.08,
+                          )
+                        : null,
                   ),
                 ),
                 SizedBox(width: width * 0.04),
@@ -538,10 +553,21 @@ class _NewLandingScreenState extends State<NewLandingScreen> {
                 Stack(
                   alignment: Alignment.center,
                   children: [
-                    CircleAvatar(
-                      radius: 48,
-                      backgroundColor: accent,
-                      child: Icon(Icons.person, size: 48, color: Colors.white),
+                    GestureDetector(
+                      onTap: () async {
+                        await _pickProfileImage();
+                        setState(() {});
+                      },
+                      child: CircleAvatar(
+                        radius: 48,
+                        backgroundColor: accent,
+                        backgroundImage: _profileImage != null
+                            ? FileImage(_profileImage!)
+                            : null,
+                        child: _profileImage == null
+                            ? Icon(Icons.person, size: 48, color: Colors.white)
+                            : null,
+                      ),
                     ),
                   ],
                 ),
@@ -585,7 +611,10 @@ class _NewLandingScreenState extends State<NewLandingScreen> {
                   ),
                   color: isDark ? Colors.grey[800] : Colors.grey[200],
                   child: ListTile(
-                    leading: const Icon(Icons.school, color: Colors.black),
+                    leading: Icon(
+                      Icons.school,
+                      color: isDark ? Colors.white : Colors.grey[900],
+                    ),
                     title: Text(
                       'Student Matricule',
                       style: TextStyle(
@@ -609,7 +638,10 @@ class _NewLandingScreenState extends State<NewLandingScreen> {
                   ),
                   color: isDark ? Colors.grey[800] : Colors.grey[200],
                   child: ListTile(
-                    leading: Icon(Icons.class_, color: Colors.black),
+                    leading: Icon(
+                      Icons.class_,
+                      color: isDark ? Colors.white : Colors.grey[900],
+                    ),
                     title: Text(
                       'Department',
                       style: TextStyle(

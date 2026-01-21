@@ -9,8 +9,14 @@ class Course {
   final int id;
   final String name;
   final int? teacherId;
+  final String? teacherName;
 
-  Course({required this.id, required this.name, this.teacherId});
+  Course({
+    required this.id,
+    required this.name,
+    this.teacherId,
+    this.teacherName,
+  });
 
   factory Course.fromJson(Map<String, dynamic> json) {
     try {
@@ -19,10 +25,14 @@ class Course {
         name:
             json['name']?.toString() ?? json['title']?.toString() ?? 'Unknown',
         teacherId: json['teacherId'] ?? json['instructorID'],
+        teacherName:
+            json['teacherName'] ??
+            json['teacher_name'] ??
+            json['instructorName'],
       );
     } catch (e, stack) {
       print('[Course.fromJson] Error parsing: $json\n$e\n$stack');
-      return Course(id: 0, name: 'Invalid', teacherId: null);
+      return Course(id: 0, name: 'Invalid', teacherId: null, teacherName: null);
     }
   }
 }

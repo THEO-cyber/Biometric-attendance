@@ -5,6 +5,7 @@ import 'package:biometric/data/enrollment_repository.dart';
 import 'package:biometric/data/student_repository.dart';
 import 'package:biometric/domain/attendance.dart';
 import 'package:biometric/domain/course.dart';
+import 'package:biometric/presentation/attendance.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,17 +19,63 @@ class AttendanceRecordsScreen extends StatefulWidget {
       _AttendanceRecordsScreenState();
 }
 
-class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
-  File? _profileImage;
-  List<Course> courses = [];
-  Map<int, String> courseIdToName = {};
-  Future<List<Course>> get _coursesFuture =>
-      EnrollmentRepository().fetchCoursesForStudent(widget.studentId);
-
+class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    print(
+      '[DEBUG] AttendanceRecordsScreen: studentId at initState: \\${widget.studentId}',
+    );
     _loadProfileImage();
+    // Automatically check eligibility if a course is already selected
+    Future.microtask(() async {
+      if (selectedCourseId != null) {
+        await checkAttendanceEligibility(selectedCourseId!);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadProfileImage();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Always reload profile image when dependencies change (like tab navigation)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadProfileImage();
+    });
+  }
+
+  @override
+  void didUpdateWidget(AttendanceRecordsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _loadProfileImage();
+  }
+
+  File? _profileImage;
+  List<Course> courses = [];
+  Map<int, String> courseIdToName = {};
+  Future<List<Course>> get _coursesFuture {
+    print(
+      '[DEBUG] AttendanceRecordsScreen: studentId at _coursesFuture: ${widget.studentId}',
+    );
+    print(
+      '[DEBUG] Calling EnrollmentRepository().fetchCoursesForStudent with studentId=${widget.studentId}',
+    );
+    return EnrollmentRepository().fetchCoursesForStudent(widget.studentId);
   }
 
   Future<void> _loadProfileImage() async {
@@ -73,10 +120,16 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                       ? FileImage(_profileImage!)
                       : null,
                   child: _profileImage == null
-                      ? Icon(
-                          Icons.fingerprint,
-                          color: isDark ? Colors.grey[900] : Colors.white,
-                          size: MediaQuery.of(context).size.width * 0.08,
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(
+                            MediaQuery.of(context).size.width * 0.06,
+                          ),
+                          child: Image.asset(
+                            'asset/image/atten.png',
+                            width: MediaQuery.of(context).size.width * 0.08,
+                            height: MediaQuery.of(context).size.width * 0.08,
+                            fit: BoxFit.cover,
+                          ),
                         )
                       : null,
                 ),
@@ -126,6 +179,9 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
   int totalRecords = 0;
   String? error;
   // String? debugRawResponse;
+
+  bool canTakeAttendance = false;
+  Map<String, dynamic>? openSession;
 
   // Removed duplicate initState; initialization is handled above.
 
@@ -194,6 +250,43 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
     }
   }
 
+  // ...existing code...
+  Future<void> checkAttendanceEligibility(int courseID) async {
+    print('[DEBUG] Checking eligibility for courseID: $courseID');
+    try {
+      final session = await StudentRepository().fetchOpenSessionForCourse(
+        courseID,
+      );
+      print('[DEBUG] Raw session response: ${session.toString()}');
+
+      setState(() {
+        openSession = session;
+        // Add more detailed debugging
+        if (session != null) {
+          print('[DEBUG] Session keys: ${session.keys.toList()}');
+          print(
+            '[DEBUG] Active field exists: ${session.containsKey('active')}',
+          );
+          print('[DEBUG] Active field value: ${session['active']}');
+          print('[DEBUG] Active field type: ${session['active'].runtimeType}');
+
+          canTakeAttendance = session['active'] == true;
+        } else {
+          canTakeAttendance = false;
+        }
+
+        print('[DEBUG] Final canTakeAttendance: $canTakeAttendance');
+      });
+    } catch (e) {
+      print('[ERROR] Error checking attendance eligibility: $e');
+      setState(() {
+        openSession = null;
+        canTakeAttendance = false;
+      });
+    }
+  }
+  // ...existing code...
+
   Widget buildFilters() {
     return FutureBuilder<List<Course>>(
       future: _coursesFuture,
@@ -207,6 +300,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
         final enrolledCourses = snapshot.data ?? [];
         courses = enrolledCourses;
         courseIdToName = {for (var c in courses) c.id: c.name};
+        // Do not auto-select any course; only check eligibility when user selects from dropdown
         Course? selectedCourse = selectedCourseId == null
             ? null
             : courses.firstWhere(
@@ -233,16 +327,52 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                 ...courses.map(
                   (course) => DropdownMenuItem<Course>(
                     value: course,
-                    child: Text(course.name),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          course.name,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        if (course.teacherName != null &&
+                            course.teacherName!.isNotEmpty)
+                          Text(
+                            'Teacher: ${course.teacherName}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ],
+              // Replace the onChanged method in the DropdownButtonFormField:
               onChanged: (Course? value) {
                 setState(() {
                   selectedCourseId = value?.id;
                   page = 1;
+                  // Reset the session data when changing course selection
+                  if (value == null) {
+                    openSession = null;
+                    canTakeAttendance = false;
+                  }
                 });
                 fetchRecords();
+                // Check attendance eligibility when a course is selected
+                if (value != null) {
+                  print(
+                    '[DEBUG] Course selected: ${value.name} (id: ${value.id})',
+                  );
+                  checkAttendanceEligibility(value.id);
+                } else {
+                  print('[DEBUG] All Courses selected, clearing eligibility');
+                  setState(() {
+                    openSession = null;
+                    canTakeAttendance = false;
+                  });
+                }
               },
               decoration: const InputDecoration(
                 labelText: 'Course',
@@ -349,6 +479,74 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
     );
   }
 
+  // ...existing code...
+  // Replace the buildAttendanceButton method:
+  Widget buildAttendanceButton() {
+    print('[DEBUG] buildAttendanceButton called');
+    print('[DEBUG] selectedCourseId: $selectedCourseId');
+    print('[DEBUG] openSession: $openSession');
+    print('[DEBUG] canTakeAttendance: $canTakeAttendance');
+
+    if (openSession != null) {
+      print('[DEBUG] openSession active value: ${openSession!['active']}');
+      print('[DEBUG] openSession sessionId: ${openSession!['sessionId']}');
+    }
+
+    if (selectedCourseId == null) {
+      return const Padding(
+        padding: EdgeInsets.all(8.0),
+        child: Text(
+          'Please select a specific course to take attendance.',
+          style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
+        ),
+      );
+    }
+
+    if (!canTakeAttendance) {
+      return const Padding(
+        padding: EdgeInsets.all(8.0),
+        child: Text(
+          'Attendance for this course is not open.',
+          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+        ),
+      );
+    }
+
+    return ElevatedButton.icon(
+      icon: Image.asset('asset/image/atten.png', width: 24, height: 24),
+      label: const Text('Take Attendance'),
+      onPressed: () {
+        print('[DEBUG] Take Attendance button pressed');
+        print('[DEBUG] openSession at button press: $openSession');
+
+        if (selectedCourseId != null && openSession != null) {
+          final selectedCourse = courses.firstWhere(
+            (c) => c.id == selectedCourseId,
+            orElse: () =>
+                Course(id: selectedCourseId!, name: '', teacherId: null),
+          );
+
+          print(
+            '[DEBUG] Navigating with sessionId: ${openSession!['sessionId']}',
+          );
+
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => AttendanceScreen(
+                student: {'id': widget.studentId},
+                course: {'id': selectedCourse.id, 'name': selectedCourse.name},
+                session: openSession!,
+              ),
+            ),
+          );
+        } else {
+          print('[DEBUG] Cannot navigate: missing course or session data');
+        }
+      },
+    );
+  }
+
+  // ...existing code...
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -361,6 +559,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             buildFilters(),
+            buildAttendanceButton(),
             const SizedBox(height: 16),
             Expanded(child: buildTable()),
           ],

@@ -1,6 +1,5 @@
 import 'package:biometric/core/service_locator.dart';
 import 'package:biometric/domain/student.dart';
-import 'package:biometric/presentation/attendance.dart';
 import 'package:biometric/presentation/new_landing.dart';
 import 'package:biometric/presentation/register.dart';
 import 'package:flutter/material.dart';

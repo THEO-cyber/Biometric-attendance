@@ -9,6 +9,7 @@ class StudentRepository {
       '$baseUrl/attendance/course/$courseID/attendance-sessions/open',
     );
     final response = await http.get(url);
+    print('Open session response: \\${response.statusCode} \\${response.body}');
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       if (data['session'] != null && data['session']['sessionId'] != null) {
@@ -18,11 +19,26 @@ class StudentRepository {
     return null;
   }
 
+  Future<Map<String, dynamic>?> fetchOpenSessionForCourse(int courseID) async {
+    final url = Uri.parse(
+      '$baseUrl/attendance/course/$courseID/attendance-sessions/open',
+    );
+    final response = await http.get(url);
+    print('Open session response: ${response.statusCode} ${response.body}');
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data;
+    }
+    return null;
+  }
+
   static const String baseUrl =
       'https://biometric-attendance-backend-acwj.onrender.com';
-
+  // ...existing code...
+  //static const String baseUrl = 'http://192.168.3.103:3000';
+  // ...existing code...
   Future<Student?> login(String email, String password) async {
-    final url = Uri.parse('$baseUrl/students/login');
+    final url = Uri.parse('$baseUrl/students/loginn');
     final payload = {'email': email, 'password': password};
     print('LOGIN REQUEST PAYLOAD: ' + jsonEncode(payload));
     final response = await http.post(
@@ -44,7 +60,7 @@ class StudentRepository {
     String matricule,
     String password,
   ) async {
-    final url = Uri.parse('$baseUrl/students/register');
+    final url = Uri.parse('$baseUrl/students/registerr');
     final payload = {
       'name': name,
       'email': email,
@@ -61,7 +77,7 @@ class StudentRepository {
     return response.statusCode == 201;
   }
 
-  Future<Attendance?> takeAttendance({
+  Future<Map<String, dynamic>?> takeAttendance({
     required int sessionID,
     required int stdId,
     required String fingerprintHash,
@@ -84,11 +100,15 @@ class StudentRepository {
       body: jsonEncode(requestBody),
     );
     print('Attendance response: ${response.statusCode} ${response.body}');
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      return Attendance.fromJson(data['attendance']);
-    }
-    return null;
+
+    final data = jsonDecode(response.body);
+
+    // Return response data with status code for better error handling
+    return {
+      'statusCode': response.statusCode,
+      'data': data,
+      'success': response.statusCode == 200,
+    };
   }
 
   Future<List<Attendance>> fetchAttendanceStatus(int stdId) async {

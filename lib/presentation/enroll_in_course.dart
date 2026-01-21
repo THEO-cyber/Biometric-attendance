@@ -5,7 +5,8 @@ import 'package:biometric/domain/course.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class EnrollInCoursePage extends StatefulWidget {
-  const EnrollInCoursePage({Key? key, int? studentId, required Color accent}) : super(key: key);
+  const EnrollInCoursePage({Key? key, int? studentId, required Color accent})
+    : super(key: key);
 
   @override
   State<EnrollInCoursePage> createState() => _EnrollInCoursePageState();
@@ -13,6 +14,7 @@ class EnrollInCoursePage extends StatefulWidget {
 
 class _EnrollInCoursePageState extends State<EnrollInCoursePage> {
   late Future<List<Course>> _coursesFuture;
+  late Future<Map<int, String>> _teacherNamesFuture;
   int? _studentId;
   bool _enrolling = false;
   int? _enrolledCourseId;
@@ -21,7 +23,9 @@ class _EnrollInCoursePageState extends State<EnrollInCoursePage> {
   void initState() {
     super.initState();
     _loadStudentId();
+    // Show all courses for enrollment, not just enrolled ones
     _coursesFuture = CourseRepository().fetchCourses();
+    _teacherNamesFuture = CourseRepository().fetchTeacherNames();
   }
 
   Future<void> _loadStudentId() async {
@@ -67,38 +71,45 @@ class _EnrollInCoursePageState extends State<EnrollInCoursePage> {
       appBar: AppBar(title: const Text('Enroll in Course')),
       body: FutureBuilder<List<Course>>(
         future: _coursesFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+        builder: (context, courseSnapshot) {
+          if (courseSnapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
-          } else if (snapshot.hasError) {
+          } else if (courseSnapshot.hasError) {
             return Center(child: Text('Error loading courses'));
-          } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          } else if (!courseSnapshot.hasData || courseSnapshot.data!.isEmpty) {
             return const Center(child: Text('No courses available.'));
           }
-          final courses = snapshot.data!;
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: courses.length,
-            separatorBuilder: (_, __) => const Divider(),
-            itemBuilder: (context, index) {
-              final course = courses[index];
-              return ListTile(
-                title: Text(course.name),
-                subtitle: course.teacherId != null
-                    ? Text('Teacher ID: \\${course.teacherId}')
-                    : null,
-                trailing: _enrolling && _enrolledCourseId == course.id
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : ElevatedButton(
-                        onPressed: _studentId == null
-                            ? null
-                            : () => _enroll(course.id),
-                        child: const Text('Enroll'),
-                      ),
+          final courses = courseSnapshot.data!;
+          return FutureBuilder<Map<int, String>>(
+            future: _teacherNamesFuture,
+            builder: (context, teacherSnapshot) {
+              final teacherNames = teacherSnapshot.data ?? {};
+              return ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemCount: courses.length,
+                separatorBuilder: (_, __) => const Divider(),
+                itemBuilder: (context, index) {
+                  final course = courses[index];
+                  final teacherName = course.teacherId != null
+                      ? teacherNames[course.teacherId] ?? 'Unknown'
+                      : 'Unknown';
+                  return ListTile(
+                    title: Text(course.name),
+                    subtitle: Text('Instructor: $teacherName'),
+                    trailing: _enrolling && _enrolledCourseId == course.id
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : ElevatedButton(
+                            onPressed: _studentId == null
+                                ? null
+                                : () => _enroll(course.id),
+                            child: const Text('Enroll'),
+                          ),
+                  );
+                },
               );
             },
           );

@@ -7,10 +7,12 @@ import 'package:flutter/material.dart';
 class AttendanceScreen extends StatefulWidget {
   final Map<String, dynamic> student;
   final Map<String, dynamic> course;
+  final Map<String, dynamic> session; // Add session parameter
   const AttendanceScreen({
     super.key,
     required this.student,
     required this.course,
+    required this.session, // Make session required
   });
 
   @override
@@ -20,6 +22,8 @@ class AttendanceScreen extends StatefulWidget {
 class _AttendanceScreenState extends State<AttendanceScreen> {
   bool isAuthenticating = false;
   String? message;
+
+  // Replace the takeAttendance method with:
 
   Future<void> takeAttendance() async {
     try {
@@ -88,36 +92,70 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       final latitude = position.latitude.toString();
       final longitude = position.longitude.toString();
       final stdId = widget.student['id'] ?? 1;
-      final courseID = widget.course['id'] ?? 1;
-      // Fetch open sessionID for the course
-      final studentRepo = ServiceLocator().studentUseCase.repository;
-      final sessionID = await studentRepo.fetchOpenSessionIdForCourse(courseID);
+
+      // Use sessionId from the passed session data instead of fetching again
+      final sessionID = widget.session['sessionId'];
+      print('[DEBUG] Using sessionId from session data: $sessionID');
+
       if (sessionID == null) {
         setState(() {
           isAuthenticating = false;
-          message = 'Attendance session is not currently open for this course.';
+          message = 'Session ID not found. Please try again.';
         });
         return;
       }
-      final useCase = ServiceLocator().studentUseCase;
-      final Attendance? attendance = await useCase.takeAttendance(
+
+      // Use the repository directly to get detailed response
+      final studentRepo = ServiceLocator().studentUseCase.repository;
+      final response = await studentRepo.takeAttendance(
         sessionID: sessionID,
         stdId: stdId,
         fingerprintHash: fingerprintHash,
         latitude: latitude,
         longitude: longitude,
       );
+
       setState(() {
         isAuthenticating = false;
       });
-      if (attendance != null) {
-        setState(() {
-          message =
-              'Attendance: ${attendance.status ?? 'recorded'} (Marked by: ${attendance.markedBy ?? 'unknown'})';
-        });
+
+      if (response != null) {
+        final statusCode = response['statusCode'];
+        final data = response['data'];
+
+        if (statusCode == 200) {
+          // Successful attendance
+          final attendance = Attendance.fromJson(data['attendance']);
+          setState(() {
+            message =
+                'Attendance successfully recorded! Status: ${attendance.status ?? 'Present'}';
+          });
+        } else if (statusCode == 409) {
+          // Conflict - attendance already taken
+          setState(() {
+            message = 'Attendance already taken for this session.';
+          });
+        } else if (statusCode == 404) {
+          setState(() {
+            message = 'Attendance session not found or has ended.';
+          });
+        } else if (statusCode == 400) {
+          // Bad request - could be invalid data
+          final errorMessage = data['message'] ?? 'Invalid attendance data.';
+          setState(() {
+            message = errorMessage;
+          });
+        } else {
+          // Other error codes
+          final errorMessage =
+              data['message'] ?? 'Attendance failed. Please try again.';
+          setState(() {
+            message = errorMessage;
+          });
+        }
       } else {
         setState(() {
-          message = 'Attendance failed. Please try again.';
+          message = 'Network error. Please try again.';
         });
       }
     } catch (e, stack) {
@@ -131,11 +169,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? Colors.grey[900] : Colors.white,
       appBar: AppBar(
         title: const Text('Attendance'),
-        backgroundColor: const Color(0xFF4169E1),
+        backgroundColor: isDark ? Colors.grey[900] : Color(0xFF4169E1),
       ),
       body: Center(
         child: Padding(
@@ -143,28 +183,39 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.fingerprint, size: 80, color: Color(0xFF4169E1)),
+              Image.asset('asset/image/atten.png', width: 80, height: 80),
               const SizedBox(height: 24),
               Text(
                 'Welcome, ${widget.student['name'] ?? 'Student'}',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF4169E1),
+                  color: isDark ? Colors.white : Color(0xFF4169E1),
                 ),
               ),
               const SizedBox(height: 8),
               Text(
                 'Matricule: ${widget.student['matricule'] ?? 'matricule'}',
-                style: const TextStyle(fontSize: 16, color: Colors.black54),
+                style: TextStyle(
+                  fontSize: 16,
+                  color: isDark ? Colors.white70 : Colors.black54,
+                ),
               ),
               const SizedBox(height: 12),
               Text(
                 'Course: ${widget.course['name']}',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w500,
-                  color: Color(0xFF4169E1),
+                  color: isDark ? Colors.white : Color(0xFF4169E1),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Session: ${widget.session['sessionId'] ?? 'Unknown'}',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isDark ? Colors.white70 : Colors.black54,
                 ),
               ),
               const SizedBox(height: 16),

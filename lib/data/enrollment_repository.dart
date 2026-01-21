@@ -4,23 +4,66 @@ import 'dart:convert';
 
 class EnrollmentRepository {
   static const String baseUrl =
-      'https://biometric-attendance-backend-acwj.onrender.com';
-
+     'https://biometric-attendance-backend-acwj.onrender.com';
+  // ...existing code...
+ // static const String baseUrl = 'http://192.168.3.103:3000';
+  // ...existing code...
   Future<List<Course>> fetchCoursesForStudent(int stdId) async {
+    print(
+      '[DEBUG] [EnrollmentRepository] fetchCoursesForStudent called with stdId=$stdId',
+    );
     final url = Uri.parse('$baseUrl/enrollments/student/$stdId');
     try {
       final response = await http.get(url);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final list = (data['courses'] ?? data) as List;
-        return list.map((e) => Course.fromJson(e)).toList();
+        List<Course> courses = [];
+        for (var e in list) {
+          final course = Course.fromJson(e);
+          String? teacherName;
+          if (course.teacherId != null) {
+            // Try /teachers/:id first, fallback to /users/:id
+            final teacherUrl = Uri.parse(
+              '$baseUrl/teachers/${course.teacherId}',
+            );
+            final teacherResp = await http.get(teacherUrl);
+            if (teacherResp.statusCode == 200) {
+              final teacherData = jsonDecode(teacherResp.body);
+              teacherName =
+                  teacherData['name'] ??
+                  teacherData['fullName'] ??
+                  teacherData['username'];
+            } else {
+              // Try /users/:id as fallback
+              final userUrl = Uri.parse('$baseUrl/users/${course.teacherId}');
+              final userResp = await http.get(userUrl);
+              if (userResp.statusCode == 200) {
+                final userData = jsonDecode(userResp.body);
+                teacherName =
+                    userData['name'] ??
+                    userData['fullName'] ??
+                    userData['username'];
+              }
+            }
+          }
+          courses.add(
+            Course(
+              id: course.id,
+              name: course.name,
+              teacherId: course.teacherId,
+              teacherName: teacherName,
+            ),
+          );
+        }
+        return courses;
       } else {
         print(
-          '[EnrollmentRepository] fetchCoursesForStudent failed: \\nStatus: \\${response.statusCode}\\nBody: \\${response.body}',
+          '[EnrollmentRepository] fetchCoursesForStudent failed: \nStatus: ${response.statusCode}\nBody: ${response.body}',
         );
       }
     } catch (e, stack) {
-      print('[EnrollmentRepository] fetchCoursesForStudent error: $e\\n$stack');
+      print('[EnrollmentRepository] fetchCoursesForStudent error: $e\n$stack');
     }
     return [];
   }

@@ -19,7 +19,7 @@ class StudentUseCase {
     return repository.register(name, email, matricule, password);
   }
 
-  Future<Attendance?> takeAttendance({
+  Future<Map<String, dynamic>?> takeAttendance({
     required int sessionID,
     required int stdId,
     required String fingerprintHash,
